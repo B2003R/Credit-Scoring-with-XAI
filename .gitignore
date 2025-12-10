@@ -1,0 +1,15 @@
+Data/Processed/
+Data/Raw
+Data/Raw/application_test.csv
+Data/Raw/application_train.csv
+Data/Raw/bureau_balance.csv
+Data/Raw/bureau.csv
+Data/Raw/credit_card_balance.csv
+Data/Raw/HomeCredit_columns_description.csv
+Data/Raw/installments_payments.csv
+Data/Raw/POS_CASH_balance.csv
+Data/Raw/previous_application.csv
+Data/Raw/sample_submission.csv
+Data/Processed/application_train_processed.parquet
+venv/
+Notebook/catboost_info/
