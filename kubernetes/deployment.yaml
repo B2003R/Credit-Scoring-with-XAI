@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-scoring-deployment
+spec:
+  replicas: 2  # Run 2 copies for reliability
+  selector:
+    matchLabels:
+      app: credit-scoring
+  template:
+    metadata:
+      labels:
+        app: credit-scoring
+    spec:
+      containers:
+      - name: credit-scoring-api
+        image: credit-scoring-app:v1
+        imagePullPolicy: Never  # Use local image (since we haven't pushed to DockerHub)
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: credit-scoring-service
+spec:
+  type: NodePort  # Exposes it to outside (or LoadBalancer if cloud)
+  selector:
+    app: credit-scoring
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 30007 # Access via http://localhost:30007
