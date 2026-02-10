@@ -1,0 +1,9 @@
+# Testing dependencies
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-asyncio>=0.21.0,<0.22.0
+httpx>=0.24.0,<0.26.0
+
+# Required for API testing
+fastapi>=0.104.0,<0.110.0
+pydantic>=2.0.0,<3.0.0

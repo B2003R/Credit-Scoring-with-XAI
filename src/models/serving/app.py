@@ -7,7 +7,7 @@ import os
 from fastapi import FastAPI, HTTPException, Security, Request
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Dict
 from contextlib import asynccontextmanager
 
@@ -99,7 +99,8 @@ class CustomerData(BaseModel):
         description="Customer features for credit scoring"
     )
     
-    @validator('features')
+    @field_validator('features')
+    @classmethod
     def validate_features(cls, v):
         """Validate feature dictionary"""
         if not v:
