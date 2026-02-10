@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import joblib
 import time
 import re
+import os
+import logging
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
@@ -20,8 +22,20 @@ from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Configuration with environment variables
+DATA_DIR = os.getenv('DATA_DIR', 'Data/Processed')
+MODEL_DIR = os.getenv('MODEL_DIR', 'Model')
+MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'sqlite:///mlflow.db')
+
 # Setup MLflow Experiment
-mlflow.set_tracking_uri("sqlite:///mlflow.db")  # Local DB
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment("Credit_Scoring_Production")
 
 
@@ -34,13 +48,19 @@ def clean_feature_name(name):
 
 
 def train_and_log():
-    print("="*60)
-    print("Starting MLflow Training Pipeline")
-    print("="*60)
+    logger.info("="*60)
+    logger.info("Starting MLflow Training Pipeline")
+    logger.info("="*60)
     
     # 1. Load Data
-    print("\n[1/7] Loading data...")
-    df = pd.read_parquet("C:\\Kuslu\\project\\Credit Scoring with XAI\\Data\\Processed\\application_train_processed.parquet")
+    logger.info("\n[1/7] Loading data...")
+    data_path = os.path.join(DATA_DIR, "application_train_processed.parquet")
+    
+    if not os.path.exists(data_path):
+        logger.error(f"Data file not found at: {data_path}")
+        raise FileNotFoundError(f"Data file not found: {data_path}")
+    
+    df = pd.read_parquet(data_path)
     X = df.drop(columns=['TARGET', 'event_timestamp']) # Drop Feast columns
     y = df['TARGET']
     
@@ -52,7 +72,7 @@ def train_and_log():
     label_encoders = {}
     
     if object_cols:
-        print(f"   Encoding {len(object_cols)} categorical columns...")
+        logger.info(f"   Encoding {len(object_cols)} categorical columns...")
         for col in object_cols:
             le = LabelEncoder()
             X[col] = X[col].fillna('Missing')
@@ -63,30 +83,30 @@ def train_and_log():
     X.columns = [clean_feature_name(col) for col in X.columns]
     num_cols = [clean_feature_name(col) for col in num_cols]
     
-    print(f"✅ Features prepared: {X.shape[1]} features")
+    logger.info(f"✅ Features prepared: {X.shape[1]} features")
     
     # 3. Train-Test Split
-    print("\n[3/7] Splitting data...")
+    logger.info("\n[3/7] Splitting data...")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=42
     )
-    print(f"✅ Train: {X_train.shape}, Test: {X_test.shape}")
+    logger.info(f"✅ Train: {X_train.shape}, Test: {X_test.shape}")
     
     # 4. Imputation
-    print("\n[4/7] Imputing missing values...")
+    logger.info("\n[4/7] Imputing missing values...")
     imputer = SimpleImputer(strategy='median')
     X_train[num_cols] = imputer.fit_transform(X_train[num_cols])
     X_test[num_cols] = imputer.transform(X_test[num_cols])
-    print("✅ Imputation complete")
+    logger.info("✅ Imputation complete")
     
     # 5. Feature Scaling
-    print("\n[5/7] Scaling features...")
+    logger.info("\n[5/7] Scaling features...")
     X_train_scaled = X_train.copy()
     X_test_scaled = X_test.copy()
     scaler = StandardScaler()
     X_train_scaled[num_cols] = scaler.fit_transform(X_train[num_cols])
     X_test_scaled[num_cols] = scaler.transform(X_test[num_cols])
-    print("✅ Scaling complete")
+    logger.info("✅ Scaling complete")
     
     # 6. Setup Cross-Validation
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
@@ -97,8 +117,8 @@ def train_and_log():
     scale_pos_weight_value = count_neg / count_pos
     
     # 7. Train Multiple Models with MLflow
-    print("\n[6/7] Training models with MLflow tracking...")
-    print("-"*60)
+    logger.info("\n[6/7] Training models with MLflow tracking...")
+    logger.info("-"*60)
     
     models = {
         "Logistic_Regression": LogisticRegression(
@@ -149,7 +169,7 @@ def train_and_log():
     best_model_name = ""
     
     for name, model in models.items():
-        print(f"\nTraining {name}...")
+        logger.info(f"\nTraining {name}...")
         
         with mlflow.start_run(run_name=f"{name}_Run"):
             start_time = time.time()
@@ -260,12 +280,12 @@ def train_and_log():
             print(f"   Test AUC: {test_auc:.4f}")
             print(f"   Time: {elapsed_time:.1f}s")
     
-    print("\n" + "="*60)
-    print(f"✅ Best Model: {best_model_name} (Test AUC: {best_auc:.4f})")
-    print("="*60)
+    logger.info("\n" + "="*60)
+    logger.info(f"✅ Best Model: {best_model_name} (Test AUC: {best_auc:.4f})")
+    logger.info("="*60)
     
     # 8. Generate SHAP Explanations for Best Model
-    print("\n[7/7] Generating SHAP explanations for best model...")
+    logger.info("\n[7/7] Generating SHAP explanations for best model...")
     
     with mlflow.start_run(run_name=f"{best_model_name}_SHAP_Analysis"):
         # Select appropriate test data
@@ -293,16 +313,18 @@ def train_and_log():
         mlflow.log_artifact("shap_summary_best_model.png")
         plt.close()
         
-        print("✅ SHAP analysis complete")
+        logger.info("✅ SHAP analysis complete")
     
     # 9. Save Best Model and Artifacts Locally
-    print("\n[Final] Saving best model locally...")
-    model_dir = "C:\\Kuslu\\project\\Credit Scoring with XAI\\Model"
+    logger.info("\n[Final] Saving best model locally...")
     
-    joblib.dump(best_model, f"{model_dir}\\{best_model_name.lower()}_best_model.pkl")
-    joblib.dump(scaler, f"{model_dir}\\scaler.pkl")
-    joblib.dump(imputer, f"{model_dir}\\imputer.pkl")
-    joblib.dump(label_encoders, f"{model_dir}\\label_encoders.pkl")
+    # Create model directory if it doesn't exist
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    
+    joblib.dump(best_model, os.path.join(MODEL_DIR, f"{best_model_name.lower()}_best_model.pkl"))
+    joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.pkl"))
+    joblib.dump(imputer, os.path.join(MODEL_DIR, "imputer.pkl"))
+    joblib.dump(label_encoders, os.path.join(MODEL_DIR, "label_encoders.pkl"))
     
     # Save results summary
     results_df = pd.DataFrame({
@@ -311,14 +333,14 @@ def train_and_log():
         'Test_AUC': [results[name]['test_auc'] for name in results.keys()]
     }).sort_values('Test_AUC', ascending=False)
     
-    results_df.to_csv(f"{model_dir}\\model_comparison_results.csv", index=False)
+    results_df.to_csv(os.path.join(MODEL_DIR, "model_comparison_results.csv"), index=False)
     
-    print(f"✅ Best model saved: {best_model_name}")
-    print(f"\n{results_df.to_string(index=False)}")
-    print("\n" + "="*60)
-    print("MLflow Training Pipeline Complete!")
-    print(f"View results: mlflow ui --backend-store-uri sqlite:///mlflow.db")
-    print("="*60)
+    logger.info(f"✅ Best model saved: {best_model_name}")
+    logger.info(f"\n{results_df.to_string(index=False)}")
+    logger.info("\n" + "="*60)
+    logger.info("MLflow Training Pipeline Complete!")
+    logger.info(f"View results: mlflow ui --backend-store-uri {MLFLOW_TRACKING_URI}")
+    logger.info("="*60)
 
 
 if __name__ == "__main__":
