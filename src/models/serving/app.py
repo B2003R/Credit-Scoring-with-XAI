@@ -4,6 +4,7 @@ import shap
 import uvicorn
 import logging
 import os
+import math
 from fastapi import FastAPI, HTTPException, Security, Request
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
@@ -113,8 +114,10 @@ class CustomerData(BaseModel):
         for key, value in v.items():
             if not isinstance(value, (int, float)):
                 raise ValueError(f"Feature '{key}' must be numeric")
-            if not isinstance(value, bool) and (value != value or value == float('inf') or value == float('-inf')):
-                raise ValueError(f"Feature '{key}' has invalid value (NaN or Inf)")
+            # Check for NaN and Inf values (booleans are excluded from this check)
+            if not isinstance(value, bool):
+                if math.isnan(value) or math.isinf(value):
+                    raise ValueError(f"Feature '{key}' has invalid value (NaN or Inf)")
         
         return v
 
