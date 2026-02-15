@@ -13,3 +13,25 @@ Data/Raw/sample_submission.csv
 Data/Processed/application_train_processed.parquet
 venv/
 Notebook/catboost_info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
